@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SkyPulse — Weather Dashboard</title>
+
+  <!-- Google Fonts: Syne (display) + DM Sans (body) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Weather Icons CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.12/css/weather-icons.min.css" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ========== SIDEBAR ========== -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">⛅</span>
+      <span class="logo-text">SkyPulse</span>
+    </div>
+
+    <!-- Search -->
+    <div class="search-box">
+      <input
+        type="text"
+        id="city-input"
+        placeholder="Search city..."
+        autocomplete="off"
+      />
+      <button id="search-btn" title="Search">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </button>
+    </div>
+
+    <!-- Error message -->
+    <div class="error-msg" id="error-msg">
+      <span>⚠</span> City not found. Try again.
+    </div>
+
+    <!-- Sidebar current weather snapshot -->
+    <div class="sidebar-weather" id="sidebar-weather">
+      <div class="sidebar-temp" id="sidebar-temp">--°</div>
+      <div class="sidebar-desc" id="sidebar-desc">Search a city</div>
+      <div class="sidebar-city" id="sidebar-city">—</div>
+      <div class="sidebar-date" id="sidebar-date"></div>
+      <div class="sidebar-icon" id="sidebar-icon">
+        <i class="wi wi-day-sunny"></i>
+      </div>
+    </div>
+
+    <!-- Nav links (visual only — all scroll to sections) -->
+    <nav class="sidebar-nav">
+      <a href="#section-highlights" class="nav-item active">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a href="#section-forecast" class="nav-item">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Forecast
+      </a>
+      <a href="#section-hourly" class="nav-item">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Hourly
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      Powered by OpenWeatherMap
+    </div>
+  </aside>
+
+  <!-- ========== MAIN CONTENT ========== -->
+  <main class="main-content">
+
+    <!-- Loading overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+      <div class="spinner"></div>
+      <p>Fetching weather data…</p>
+    </div>
+
+    <!-- Welcome screen (shown before any search) -->
+    <section class="welcome-screen" id="welcome-screen">
+      <div class="welcome-icon">🌤️</div>
+      <h1>Welcome to SkyPulse</h1>
+      <p>Search for a city in the sidebar to see live weather data, forecasts, and highlights.</p>
+    </section>
+
+    <!-- Dashboard (hidden until data loads) -->
+    <div class="dashboard" id="dashboard" style="display:none;">
+
+      <!-- Top bar -->
+      <div class="topbar">
+        <div>
+          <h2 class="topbar-city" id="topbar-city">—</h2>
+          <p class="topbar-subtitle" id="topbar-subtitle">Live weather data</p>
+        </div>
+        <div class="topbar-unit-toggle">
+          <button class="unit-btn active" id="btn-celsius">°C</button>
+          <button class="unit-btn" id="btn-fahrenheit">°F</button>
+        </div>
+      </div>
+
+      <!-- ---- HIGHLIGHTS ---- -->
+      <section id="section-highlights">
+        <h3 class="section-title">Today's Highlights</h3>
+        <div class="highlights-grid">
+
+          <div class="highlight-card card-wide">
+            <span class="card-label">Feels Like</span>
+            <div class="card-value" id="h-feels">--°</div>
+            <span class="card-sub" id="h-feels-desc">—</span>
+          </div>
+
+          <div class="highlight-card">
+            <span class="card-label">💧 Humidity</span>
+            <div class="card-value" id="h-humidity">--%</div>
+            <div class="progress-bar"><div class="progress-fill" id="hum-bar"></div></div>
+          </div>
+
+          <div class="highlight-card">
+            <span class="card-label">🌬️ Wind Speed</span>
+            <div class="card-value" id="h-wind">-- m/s</div>
+            <span class="card-sub" id="h-wind-dir">—</span>
+          </div>
+
+          <div class="highlight-card">
+            <span class="card-label">📊 Pressure</span>
+            <div class="card-value" id="h-pressure">-- hPa</div>
+            <span class="card-sub">Atmospheric</span>
+          </div>
+
+          <div class="highlight-card">
+            <span class="card-label">👁️ Visibility</span>
+            <div class="card-value" id="h-visibility">-- km</div>
+            <span class="card-sub" id="h-vis-desc">—</span>
+          </div>
+
+          <div class="highlight-card">
+            <span class="card-label">🌅 Sunrise / Sunset</span>
+            <div class="sun-times">
+              <div>
+                <div class="sun-label">Sunrise</div>
+                <div class="card-value small" id="h-sunrise">--:--</div>
+              </div>
+              <div class="sun-divider"></div>
+              <div>
+                <div class="sun-label">Sunset</div>
+                <div class="card-value small" id="h-sunset">--:--</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ---- HOURLY FORECAST ---- -->
+      <section id="section-hourly">
+        <h3 class="section-title">Hourly Forecast</h3>
+        <div class="hourly-scroll">
+          <div class="hourly-list" id="hourly-list">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ---- 5-DAY FORECAST ---- -->
+      <section id="section-forecast">
+        <h3 class="section-title">5-Day Forecast</h3>
+        <div class="forecast-grid" id="forecast-grid">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+
+    </div><!-- /dashboard -->
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
