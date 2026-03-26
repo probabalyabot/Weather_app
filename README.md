@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # SkyPulse — Weather Dashboard
 
 A modern, responsive weather application that provides real-time weather information, hourly forecasts, and 5-day weather predictions using the OpenWeatherMap API.
@@ -151,3 +152,7 @@ This project is open source and available for personal and educational use.
 ## 📧 Support
 
 For issues or questions, feel free to open an issue or contact the developer.
+=======
+# Weather_app
+Web programming project
+>>>>>>> 5a031a69decdf24faf5f235d2932e432d7fdc2bd
