@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # SkyPulse — Weather Dashboard
 
 A modern, responsive weather application that provides real-time weather information, hourly forecasts, and 5-day weather predictions using the OpenWeatherMap API.
