@@ -1,105 +1,103 @@
 /* ================================================
    SkyPulse — script.js
-   Connects to OpenWeatherMap API and updates the UI.
+   Uses emoji icons — no external icon font needed.
 
-   HOW IT WORKS (quick overview):
-   1. User types a city and clicks Search (or presses Enter).
-   2. We call the OpenWeatherMap API (two endpoints):
-      - /weather  → current conditions
-      - /forecast → 5-day / hourly forecast
-   3. We take the JSON response and display it on the page.
-
-   BEGINNER TIP: JSON = JavaScript Object Notation.
-   The API sends back data in this format and we read it
-   like: data.main.temp  or  data.weather[0].description
+   HOW IT WORKS:
+   1. User searches a city → handleSearch() runs
+   2. fetchWeather() calls TWO OpenWeatherMap endpoints:
+      /weather  → current conditions
+      /forecast → 3-hour steps for 5 days
+   3. Each populate___() function fills one section of the page
    ================================================ */
 
 
-// ── ① YOUR API KEY ────────────────────────────────────────────────────────────
-// Sign up free at https://openweathermap.org/api
-// Replace the string below with your own key:
-const API_KEY = "bae452a422f7a39c9041a275d3f55b9a";
 
-// Base URL for the API (both endpoints start here)
+
 const BASE_URL = "https://api.openweathermap.org/data/2.5";
 
+// ── ELEMENT REFERENCES ─────────────────────────────────────────────────────
 
-// ── ② GRAB HTML ELEMENTS ──────────────────────────────────────────────────────
-// We store references to elements we'll update, so we don't
-// have to call getElementById() every single time.
-
-const cityInput    = document.getElementById("city-input");
-const searchBtn    = document.getElementById("search-btn");
-const errorMsg     = document.getElementById("error-msg");
-
-// Sidebar snapshot
-const sidebarTemp  = document.getElementById("sidebar-temp");
-const sidebarDesc  = document.getElementById("sidebar-desc");
-const sidebarCity  = document.getElementById("sidebar-city");
-const sidebarDate  = document.getElementById("sidebar-date");
-const sidebarIcon  = document.getElementById("sidebar-icon");
-
-// Top bar
-const topbarCity     = document.getElementById("topbar-city");
-const topbarSubtitle = document.getElementById("topbar-subtitle");
-
-// Highlights
-const hFeels    = document.getElementById("h-feels");
-const hFeelDesc = document.getElementById("h-feels-desc");
-const hHumidity = document.getElementById("h-humidity");
-const humBar    = document.getElementById("hum-bar");
-const hWind     = document.getElementById("h-wind");
-const hWindDir  = document.getElementById("h-wind-dir");
-const hPressure = document.getElementById("h-pressure");
-const hVis      = document.getElementById("h-visibility");
-const hVisDesc  = document.getElementById("h-vis-desc");
-const hSunrise  = document.getElementById("h-sunrise");
-const hSunset   = document.getElementById("h-sunset");
-
-// Lists populated dynamically
-const hourlyList   = document.getElementById("hourly-list");
-const forecastGrid = document.getElementById("forecast-grid");
-
-// Panels
+// Inputs / UI controls
+const cityInput      = document.getElementById("city-input");
+const searchBtn      = document.getElementById("search-btn");
+const errorMsg       = document.getElementById("error-msg");
 const loadingOverlay = document.getElementById("loading-overlay");
 const welcomeScreen  = document.getElementById("welcome-screen");
 const dashboard      = document.getElementById("dashboard");
+const btnCelsius     = document.getElementById("btn-celsius");
+const btnFahrenheit  = document.getElementById("btn-fahrenheit");
 
-// Unit toggle buttons
-const btnCelsius    = document.getElementById("btn-celsius");
-const btnFahrenheit = document.getElementById("btn-fahrenheit");
+// Topbar
+const topbarCity = document.getElementById("topbar-city");
+const topbarTime = document.getElementById("topbar-time");
+
+// Sidebar snapshot
+const sidebarIcon = document.getElementById("sidebar-icon");
+const sidebarTemp = document.getElementById("sidebar-temp");
+const sidebarCity = document.getElementById("sidebar-city");
+const sidebarDesc = document.getElementById("sidebar-desc");
+const sidebarDate = document.getElementById("sidebar-date");
+
+// Hero (current weather card)
+const heroTemp    = document.getElementById("hero-temp");
+const heroDesc    = document.getElementById("hero-desc");
+const heroFeels   = document.getElementById("hero-feels");
+const heroDate    = document.getElementById("hero-date");
+const heroIcon    = document.getElementById("hero-icon");
+const heroCity    = document.getElementById("hero-city");
+const heroSunrise = document.getElementById("hero-sunrise");
+const heroSunset  = document.getElementById("hero-sunset");
+
+// Quick stats (right column)
+const qsHumidity = document.getElementById("qs-humidity");
+const qsWind     = document.getElementById("qs-wind");
+const qsVis      = document.getElementById("qs-vis");
+const qsPressure = document.getElementById("qs-pressure");
+
+// Highlights grid
+const hlFeels    = document.getElementById("hl-feels");
+const hlFeelsSub = document.getElementById("hl-feels-sub");
+const hlHumidity = document.getElementById("hl-humidity");
+const hlHumBar   = document.getElementById("hl-hum-bar");
+const hlWind     = document.getElementById("hl-wind");
+const hlWindDir  = document.getElementById("hl-wind-dir");
+const hlPressure = document.getElementById("hl-pressure");
+const hlVis      = document.getElementById("hl-vis");
+const hlVisSub   = document.getElementById("hl-vis-sub");
+const hlMin      = document.getElementById("hl-min");
+const hlMax      = document.getElementById("hl-max");
+
+// Lists
+const forecastGrid = document.getElementById("forecast-grid");
+const hourlyList   = document.getElementById("hourly-list");
 
 
-// ── ③ STATE VARIABLES ─────────────────────────────────────────────────────────
-// These variables hold data between function calls.
-
-let currentUnit = "metric";  // "metric" = Celsius, "imperial" = Fahrenheit
-let lastCity    = "";        // remember the last searched city (to allow unit switching)
+// ── STATE ───────────────────────────────────────────────────────────────────
+let currentUnit = "metric"; // "metric" = Celsius | "imperial" = Fahrenheit
+let lastCity    = "";       // remember last search so unit toggle works
 
 
-// ── ④ EVENT LISTENERS ─────────────────────────────────────────────────────────
+// ──  EVENT LISTENERS ─────────────────────────────────────────────────────────
 
-// Search on button click
-searchBtn.addEventListener("click", () => {
-  handleSearch();
+// Search button click
+searchBtn.addEventListener("click", handleSearch);
+
+// Press Enter inside input
+cityInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") handleSearch();
 });
 
-// Search when user presses Enter key inside the input
-cityInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") handleSearch();
-});
-
-// Unit toggle — switch between Celsius and Fahrenheit
+// Switch to Celsius
 btnCelsius.addEventListener("click", () => {
   if (currentUnit !== "metric") {
     currentUnit = "metric";
     btnCelsius.classList.add("active");
     btnFahrenheit.classList.remove("active");
-    // Re-fetch data in the new unit
-    if (lastCity) fetchWeather(lastCity);
+    if (lastCity) fetchWeather(lastCity); // re-fetch with new unit
   }
 });
 
+// Switch to Fahrenheit
 btnFahrenheit.addEventListener("click", () => {
   if (currentUnit !== "imperial") {
     currentUnit = "imperial";
@@ -110,305 +108,296 @@ btnFahrenheit.addEventListener("click", () => {
 });
 
 
-// ── ⑤ MAIN SEARCH HANDLER ────────────────────────────────────────────────────
+// ──  QUICK SEARCH (city pills on welcome screen) ─────────────────────────────
+// Called via onclick="" in HTML
+function quickSearch(city) {
+  cityInput.value = city;
+  fetchWeather(city);
+}
 
+
+// ──  HANDLE SEARCH ──────────────────────────────────────────────────────────
 function handleSearch() {
-  const city = cityInput.value.trim(); // remove extra spaces
-
+  const city = cityInput.value.trim();
   if (!city) return; // do nothing if input is empty
-
   hideError();
   fetchWeather(city);
 }
 
 
-// ── ⑥ FETCH WEATHER DATA ─────────────────────────────────────────────────────
-// This calls BOTH API endpoints at the same time using Promise.all().
-// Promise.all([a, b]) waits for BOTH requests to finish before continuing.
-
+// ──  FETCH DATA FROM API ────────────────────────────────────────────────────
+// Promise.all fires BOTH requests at the same time — faster!
 async function fetchWeather(city) {
   showLoading(true);
   lastCity = city;
 
-  // Build the URLs with the city, API key, and unit system
   const currentURL  = `${BASE_URL}/weather?q=${city}&appid=${API_KEY}&units=${currentUnit}`;
   const forecastURL = `${BASE_URL}/forecast?q=${city}&appid=${API_KEY}&units=${currentUnit}`;
 
   try {
-    // fetch() sends a network request; await waits for the response
-    const [currentRes, forecastRes] = await Promise.all([
+    // Send both requests simultaneously
+    const [curRes, fcRes] = await Promise.all([
       fetch(currentURL),
       fetch(forecastURL),
     ]);
 
-    // If either request fails (wrong city, network error), throw an error
-    if (!currentRes.ok || !forecastRes.ok) {
-      throw new Error("City not found");
-    }
+    // If either fails (bad city name, network issue) throw error
+    if (!curRes.ok || !fcRes.ok) throw new Error("City not found");
 
-    // .json() converts the raw response text into a JavaScript object
-    const currentData  = await currentRes.json();
-    const forecastData = await forecastRes.json();
+    // .json() turns the raw response into a JavaScript object
+    const curData = await curRes.json();
+    const fcData  = await fcRes.json();
 
-    // Update the whole UI
-    updateCurrentWeather(currentData);
-    updateHighlights(currentData);
-    updateHourlyForecast(forecastData);
-    updateForecast(forecastData);
+    // Fill each section of the page
+    populateSidebar(curData);
+    populateHero(curData);
+    populateQuickStats(curData);
+    populateHighlights(curData);
+    populateForecast(fcData);
+    populateHourly(fcData);
+    updateTopbar(curData);
 
-    // Show dashboard, hide welcome screen
+    // Hide welcome, show dashboard
     welcomeScreen.style.display = "none";
     dashboard.style.display     = "block";
 
-  } catch (error) {
-    // Show error message to user
+  } catch (err) {
     showError();
   } finally {
-    // Always hide loading (runs even if there was an error)
-    showLoading(false);
+    showLoading(false); // always hide loading, even on error
   }
 }
 
 
-// ── ⑦ UPDATE CURRENT WEATHER (sidebar + topbar) ───────────────────────────────
+// ──  POPULATE FUNCTIONS ─────────────────────────────────────────────────────
 
-function updateCurrentWeather(data) {
-  const unitSymbol = currentUnit === "metric" ? "°C" : "°F";
-  const temp       = Math.round(data.main.temp);
-  const desc       = data.weather[0].description;   // e.g. "light rain"
-  const city       = `${data.name}, ${data.sys.country}`; // "London, GB"
-  const iconCode   = data.weather[0].id;             // numeric weather code
+/* Sidebar snapshot card */
+function populateSidebar(data) {
+  const sym = unit();
+  sidebarIcon.textContent = weatherEmoji(data.weather[0].id);
+  sidebarTemp.textContent = `${Math.round(data.main.temp)}${sym}`;
+  sidebarCity.textContent = `${data.name}, ${data.sys.country}`;
+  sidebarDesc.textContent = data.weather[0].description;
+  sidebarDate.textContent = niceDate();
+}
 
-  // Sidebar snapshot
-  sidebarTemp.textContent = `${temp}${unitSymbol}`;
-  sidebarDesc.textContent = desc;
-  sidebarCity.textContent = city;
-  sidebarDate.textContent = getFormattedDate();
-  sidebarIcon.innerHTML   = `<i class="${getWeatherIconClass(iconCode)}"></i>`;
-
-  // Top bar
-  topbarCity.textContent     = city;
-  topbarSubtitle.textContent = `${desc} · Updated just now`;
+/* Hero (main big card) */
+function populateHero(data) {
+  const sym = unit();
+  heroTemp.textContent    = `${Math.round(data.main.temp)}${sym}`;
+  heroDesc.textContent    = data.weather[0].description;
+  heroFeels.textContent   = `Feels like ${Math.round(data.main.feels_like)}${sym}`;
+  heroDate.textContent    = niceDate();
+  heroIcon.textContent    = weatherEmoji(data.weather[0].id);
+  heroCity.textContent    = `${data.name}, ${data.sys.country}`;
+  heroSunrise.textContent = unixToTime(data.sys.sunrise, data.timezone);
+  heroSunset.textContent  = unixToTime(data.sys.sunset,  data.timezone);
 
   // Update browser tab title
-  document.title = `${temp}${unitSymbol} ${city} — SkyPulse`;
+  document.title = `${Math.round(data.main.temp)}${sym} · ${data.name} — SkyPulse`;
 }
 
-
-// ── ⑧ UPDATE HIGHLIGHTS ───────────────────────────────────────────────────────
-
-function updateHighlights(data) {
-  const unitSymbol  = currentUnit === "metric" ? "°C" : "°F";
-  const speedUnit   = currentUnit === "metric" ? "m/s" : "mph";
-
-  const feelsLike   = Math.round(data.main.feels_like);
-  const humidity    = data.main.humidity;       // percentage
-  const windSpeed   = data.wind.speed;
-  const windDeg     = data.wind.deg ?? 0;
-  const pressure    = data.main.pressure;       // hPa
-  const visibility  = (data.visibility / 1000).toFixed(1); // metres → km
-
-  // Sunrise & sunset times (Unix timestamp → readable time)
-  const sunrise = formatUnixTime(data.sys.sunrise, data.timezone);
-  const sunset  = formatUnixTime(data.sys.sunset,  data.timezone);
-
-  // Populate elements
-  hFeels.textContent    = `${feelsLike}${unitSymbol}`;
-  hFeelDesc.textContent = getFeelsLikeLabel(feelsLike, currentUnit);
-
-  hHumidity.textContent = `${humidity}%`;
-  humBar.style.width    = `${humidity}%`; // animate the progress bar
-
-  hWind.textContent     = `${windSpeed} ${speedUnit}`;
-  hWindDir.textContent  = `Direction: ${getWindDirection(windDeg)}`;
-
-  hPressure.textContent = `${pressure} hPa`;
-
-  hVis.textContent      = `${visibility} km`;
-  hVisDesc.textContent  = getVisibilityLabel(parseFloat(visibility));
-
-  hSunrise.textContent  = sunrise;
-  hSunset.textContent   = sunset;
+/* Quick stat cards in right column */
+function populateQuickStats(data) {
+  const spd = currentUnit === "metric" ? "m/s" : "mph";
+  qsHumidity.textContent = `${data.main.humidity}%`;
+  qsWind.textContent     = `${data.wind.speed} ${spd}`;
+  qsVis.textContent      = `${(data.visibility / 1000).toFixed(1)} km`;
+  qsPressure.textContent = `${data.main.pressure} hPa`;
 }
 
+/* Highlights grid */
+function populateHighlights(data) {
+  const sym  = unit();
+  const spd  = currentUnit === "metric" ? "m/s" : "mph";
+  const feels   = Math.round(data.main.feels_like);
+  const humidity = data.main.humidity;
+  const vis  = (data.visibility / 1000).toFixed(1);
 
-// ── ⑨ UPDATE HOURLY FORECAST ──────────────────────────────────────────────────
-// The /forecast endpoint gives data in 3-hour steps for 5 days.
-// We take the first 8 entries = 24 hours.
+  hlFeels.textContent    = `${feels}${sym}`;
+  hlFeelsSub.textContent = feelsLabel(feels);
 
-function updateHourlyForecast(data) {
-  const unitSymbol = currentUnit === "metric" ? "°C" : "°F";
-  const entries    = data.list.slice(0, 8); // first 8 × 3h = 24 hours
+  hlHumidity.textContent  = `${humidity}%`;
+  hlHumBar.style.width    = `${humidity}%`; // CSS transition animates this
 
-  hourlyList.innerHTML = ""; // clear previous content
+  hlWind.textContent    = `${data.wind.speed} ${spd}`;
+  hlWindDir.textContent = `Direction: ${compassDir(data.wind.deg ?? 0)}`;
 
-  entries.forEach((entry, index) => {
-    const time    = formatUnixTime(entry.dt, data.city.timezone);
-    const temp    = Math.round(entry.main.temp);
-    const iconCls = getWeatherIconClass(entry.weather[0].id);
+  hlPressure.textContent = `${data.main.pressure} hPa`;
 
-    // Build an hourly card element
-    const item = document.createElement("div");
-    item.classList.add("hourly-item");
-    if (index === 0) item.classList.add("now"); // highlight the first (current) slot
+  hlVis.textContent    = `${vis} km`;
+  hlVisSub.textContent = visLabel(parseFloat(vis));
 
-    item.innerHTML = `
-      <span class="hour-time">${index === 0 ? "Now" : time}</span>
-      <i class="wi ${iconCls} hour-icon"></i>
-      <span class="hour-temp">${temp}${unitSymbol}</span>
-    `;
-
-    hourlyList.appendChild(item);
-  });
+  hlMin.textContent = `${Math.round(data.main.temp_min)}${sym}`;
+  hlMax.textContent = `${Math.round(data.main.temp_max)}${sym}`;
 }
 
-
-// ── ⑩ UPDATE 5-DAY FORECAST ──────────────────────────────────────────────────
-// The /forecast list has one entry every 3 hours.
-// We group them by day and get one card per day.
-
-function updateForecast(data) {
-  const unitSymbol = currentUnit === "metric" ? "°C" : "°F";
+/* 5-day forecast cards */
+function populateForecast(data) {
+  const sym = unit();
   forecastGrid.innerHTML = "";
 
-  // Group entries by calendar date
-  const days = {}; // { "2024-01-15": [entry, entry, ...], ... }
-
+  // Group the API's 3-hour entries by calendar date
+  const days = {};
   data.list.forEach((entry) => {
-    // entry.dt_txt looks like "2024-01-15 12:00:00"
-    const dateKey = entry.dt_txt.split(" ")[0];
-    if (!days[dateKey]) days[dateKey] = [];
-    days[dateKey].push(entry);
+    const key = entry.dt_txt.split(" ")[0]; // "2024-06-15"
+    if (!days[key]) days[key] = [];
+    days[key].push(entry);
   });
 
-  // Get up to 5 days (skip today if we already have it)
-  const dayKeys = Object.keys(days).slice(0, 5);
+  // Build one card per day (up to 5)
+  Object.keys(days).slice(0, 5).forEach((dateKey) => {
+    const entries = days[dateKey];
+    const temps   = entries.map((e) => e.main.temp);
+    const high    = Math.round(Math.max(...temps));
+    const low     = Math.round(Math.min(...temps));
 
-  dayKeys.forEach((dateKey) => {
-    const entries    = days[dateKey];
-    const temps      = entries.map((e) => e.main.temp);
-    const maxTemp    = Math.round(Math.max(...temps));
-    const minTemp    = Math.round(Math.min(...temps));
+    // Use the noon entry for the icon (most representative of the day)
+    const sample = entries.find((e) => e.dt_txt.includes("12:00:00")) || entries[0];
+    const emoji  = weatherEmoji(sample.weather[0].id);
+    const desc   = sample.weather[0].description;
+    const day    = shortDay(dateKey);
 
-    // Use the noon entry (or closest) for the icon & description
-    const noonEntry  = entries.find((e) => e.dt_txt.includes("12:00:00")) || entries[0];
-    const desc       = noonEntry.weather[0].description;
-    const iconCode   = noonEntry.weather[0].id;
-    const iconCls    = getWeatherIconClass(iconCode);
-
-    // Format the day name
-    const dayName    = formatDayName(dateKey);
-
-    // Build the card
     const card = document.createElement("div");
-    card.classList.add("forecast-card");
+    card.className = "fc-card glass";
     card.innerHTML = `
-      <span class="forecast-day">${dayName}</span>
-      <i class="wi ${iconCls} forecast-icon"></i>
-      <span class="forecast-desc">${desc}</span>
-      <div class="forecast-temps">
-        <span class="temp-high">${maxTemp}${unitSymbol}</span>
-        <span class="temp-low">${minTemp}${unitSymbol}</span>
-      </div>
+      <span class="fc-day">${day}</span>
+      <span class="fc-icon">${emoji}</span>
+      <span class="fc-desc">${desc}</span>
+      <span class="fc-high">${high}${sym}</span>
+      <span class="fc-low">${low}${sym}</span>
     `;
-
     forecastGrid.appendChild(card);
   });
 }
 
+/* Hourly forecast (next 24 hours = first 8 entries × 3h) */
+function populateHourly(data) {
+  const sym = unit();
+  hourlyList.innerHTML = "";
 
-// ── ⑪ HELPER FUNCTIONS ────────────────────────────────────────────────────────
-// Small utility functions that do one specific task.
+  data.list.slice(0, 8).forEach((entry, i) => {
+    const time  = unixToTime(entry.dt, data.city.timezone);
+    const temp  = Math.round(entry.main.temp);
+    const emoji = weatherEmoji(entry.weather[0].id);
 
-// Return today's date as a readable string: "Mon, Jan 15"
-function getFormattedDate() {
-  return new Date().toLocaleDateString("en-US", {
-    weekday: "short",
-    month:   "short",
-    day:     "numeric",
+    const item = document.createElement("div");
+    item.className = `hr-item glass${i === 0 ? " now" : ""}`;
+    item.innerHTML = `
+      <span class="hr-time">${i === 0 ? "Now" : time}</span>
+      <span class="hr-icon">${emoji}</span>
+      <span class="hr-temp">${temp}${sym}</span>
+    `;
+    hourlyList.appendChild(item);
   });
 }
 
-// Convert a Unix timestamp (seconds) to "HH:MM AM/PM"
-// timezoneOffset is in seconds (from the API)
-function formatUnixTime(unixTimestamp, timezoneOffset) {
-  // Build a UTC date, then apply the city's timezone offset
-  const date = new Date((unixTimestamp + timezoneOffset) * 1000);
-  const hours   = date.getUTCHours();
-  const minutes = String(date.getUTCMinutes()).padStart(2, "0");
-  const ampm    = hours >= 12 ? "PM" : "AM";
-  const h12     = hours % 12 || 12;
-  return `${h12}:${minutes} ${ampm}`;
+/* Topbar city + live clock */
+function updateTopbar(data) {
+  topbarCity.textContent = `${data.name}, ${data.sys.country}`;
+  tickClock();
+  clearInterval(window._clock);
+  window._clock = setInterval(tickClock, 60000);
+}
+function tickClock() {
+  topbarTime.textContent = `· ${new Date().toLocaleTimeString("en-US", {
+    hour: "2-digit", minute: "2-digit"
+  })}`;
 }
 
-// Convert a date string ("2024-01-15") to a short day name ("Mon")
-function formatDayName(dateString) {
-  const date = new Date(dateString + "T12:00:00");
-  return date.toLocaleDateString("en-US", { weekday: "short" });
+
+
+/* Current unit symbol */
+function unit() {
+  return currentUnit === "metric" ? "°C" : "°F";
 }
 
-// Convert wind degrees (0-360) to a compass direction (N, NE, E, etc.)
-function getWindDirection(deg) {
-  const dirs = ["N","NE","E","SE","S","SW","W","NW"];
-  const index = Math.round(deg / 45) % 8;
-  return dirs[index];
+/* Nice readable date: "Monday, Jun 15" */
+function niceDate() {
+  return new Date().toLocaleDateString("en-US", {
+    weekday: "long", month: "short", day: "numeric"
+  });
 }
 
-// Return a human label based on visibility in km
-function getVisibilityLabel(km) {
+/* Convert Unix timestamp + timezone offset → "8:30 AM" */
+function unixToTime(ts, tzOffset) {
+  const d   = new Date((ts + tzOffset) * 1000);
+  const h   = d.getUTCHours();
+  const min = String(d.getUTCMinutes()).padStart(2, "0");
+  const ap  = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:${min} ${ap}`;
+}
+
+/* "2024-06-15" → "Mon" */
+function shortDay(dateStr) {
+  return new Date(dateStr + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" });
+}
+
+/* Wind degrees (0-360) → compass label */
+function compassDir(deg) {
+  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  return dirs[Math.round(deg / 45) % 8];
+}
+
+/* Visibility in km → human label */
+function visLabel(km) {
   if (km >= 10) return "Clear visibility";
   if (km >= 5)  return "Good visibility";
-  if (km >= 2)  return "Moderate visibility";
+  if (km >= 2)  return "Moderate";
   return "Poor visibility";
 }
 
-// Return a label based on feels-like temperature
-function getFeelsLikeLabel(temp, unit) {
-  const isCelsius = unit === "metric";
-  if (isCelsius) {
-    if (temp >= 35) return "🔥 Very hot";
-    if (temp >= 25) return "😎 Warm";
-    if (temp >= 15) return "🌤 Comfortable";
-    if (temp >= 5)  return "🧥 Cool";
-    return "🥶 Cold";
-  } else {
-    if (temp >= 95) return "🔥 Very hot";
-    if (temp >= 77) return "😎 Warm";
-    if (temp >= 59) return "🌤 Comfortable";
-    if (temp >= 41) return "🧥 Cool";
-    return "🥶 Cold";
-  }
+/* Feels-like temperature → comfort label */
+function feelsLabel(temp) {
+  const hot  = currentUnit === "metric" ? 35 : 95;
+  const warm = currentUnit === "metric" ? 25 : 77;
+  const cool = currentUnit === "metric" ? 15 : 59;
+  const cold = currentUnit === "metric" ? 5  : 41;
+  if (temp >= hot)  return "🔥 Very hot";
+  if (temp >= warm) return "😎 Warm & pleasant";
+  if (temp >= cool) return "🌤 Comfortable";
+  if (temp >= cold) return "🧥 Cool";
+  return "🥶 Cold";
 }
 
-// Map OpenWeatherMap weather condition ID to a Weather Icons CSS class.
-// Full ID list: https://openweathermap.org/weather-conditions
-function getWeatherIconClass(id) {
-  if (id >= 200 && id < 300) return "wi-thunderstorm";
-  if (id >= 300 && id < 400) return "wi-sprinkle";
-  if (id >= 500 && id < 510) return "wi-rain";
-  if (id === 511)             return "wi-rain-mix";
-  if (id >= 520 && id < 600) return "wi-showers";
-  if (id >= 600 && id < 700) return "wi-snow";
-  if (id >= 700 && id < 800) return "wi-fog";
-  if (id === 800)             return "wi-day-sunny";
-  if (id === 801)             return "wi-day-cloudy";
-  if (id === 802)             return "wi-cloud";
-  if (id >= 803)              return "wi-cloudy";
-  return "wi-day-sunny"; // fallback
+/*
+  Map OpenWeatherMap condition ID → emoji
+  Full ID list: https://openweathermap.org/weather-conditions
+
+  IDs are grouped:
+  2xx = Thunderstorm
+  3xx = Drizzle
+  5xx = Rain
+  6xx = Snow
+  7xx = Atmosphere (fog, mist, haze…)
+  800 = Clear sky
+  80x = Clouds
+*/
+function weatherEmoji(id) {
+  if (id >= 200 && id < 300) return "⛈️";   // thunderstorm
+  if (id >= 300 && id < 400) return "🌦️";   // drizzle
+  if (id >= 500 && id < 510) return "🌧️";   // rain
+  if (id === 511)             return "🌨️";   // freezing rain
+  if (id >= 520 && id < 600) return "🌧️";   // shower rain
+  if (id >= 600 && id < 700) return "❄️";   // snow
+  if (id >= 700 && id < 800) return "🌫️";   // fog / mist / haze
+  if (id === 800)             return "☀️";   // clear sky
+  if (id === 801)             return "🌤️";   // few clouds
+  if (id === 802)             return "⛅";   // scattered clouds
+  if (id >= 803)              return "☁️";   // broken / overcast
+  return "🌤️";                              // fallback
 }
 
 
-// ── ⑫ LOADING & ERROR UI ─────────────────────────────────────────────────────
+// ── LOADING & ERROR ────────────────────────────────────────────────────────
 
-function showLoading(visible) {
-  // Toggle display between flex (visible) and none (hidden)
-  loadingOverlay.style.display = visible ? "flex" : "none";
+function showLoading(on) {
+  loadingOverlay.style.display = on ? "flex" : "none";
 }
 
 function showError() {
-  errorMsg.style.display = "flex";
-  // Auto-hide after 4 seconds
-  setTimeout(hideError, 4000);
+  errorMsg.style.display = "block";
+  setTimeout(hideError, 4000); // auto-hide after 4 seconds
 }
 
 function hideError() {
@@ -416,7 +405,6 @@ function hideError() {
 }
 
 
-// ── ⑬ INIT ────────────────────────────────────────────────────────────────────
-// Set the date in the sidebar on page load
-
-sidebarDate.textContent = getFormattedDate();
+// ──  INIT ────────────────────────────────────────────────────────────────────
+// Set sidebar date on page load
+sidebarDate.textContent = niceDate();
